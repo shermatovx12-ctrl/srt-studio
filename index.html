@@ -4,11 +4,271 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SRT Studio</title>
+<meta name="theme-color" content="#0b1020">
+<title>SRT Studio Mobile</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1020;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif}
+header{padding:24px 18px 18px;background:linear-gradient(135deg,#172554,#312e81);border-radius:0 0 24px 24px}
+h1{font-size:27px;margin:0 0 7px}
+h2{font-size:19px;margin:0 0 12px}
+p{color:#aebbd0;font-size:14px;line-height:1.6}
+small{color:#94a3b8}
+main{max-width:650px;margin:auto;padding:16px}
+.card{background:#151e32;border:1px solid #29354b;border-radius:18px;padding:17px;margin-bottom:16px}
+label{display:block;font-size:13px;color:#cbd5e1;margin:10px 0 6px}
+textarea,input,select{width:100%;background:#0b1222;color:#fff;border:1px solid #40516b;border-radius:11px;padding:12px;font-size:16px;font-family:inherit}
+textarea{resize:vertical;min-height:100px}
+button{background:#6366f1;color:white;border:0;border-radius:12px;padding:13px 16px;font-size:15px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.45}
+.primary{width:100%;background:#4f46e5;margin-top:12px}
+.secondary{background:#293750}
+.danger{background:#7f1d1d}
+.green{background:#047857}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1;min-width:0}
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tabs button{flex:1;background:#1e293b;font-size:13px;padding:12px 5px}
+.tabs button.active{background:#4f46e5}
+.item{background:#101a2c;border:1px solid #334155;border-radius:13px;padding:12px;margin:10px 0}
+.itemhead{display:flex;justify-content:space-between;align-items:center}
+.itemhead button{padding:8px 11px}
+.time{font-size:13px;padding:9px 5px}
+.item textarea{min-height:70px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#080e1b;padding:13px;border-radius:12px;font-size:12px;line-height:1.6;max-height:260px;overflow:auto}
+.hidden{display:none}
+.notice{padding:11px;border-radius:10px;background:#24314a;color:#dbeafe;font-size:13px;margin:10px 0}
+.error{background:#4c1d1d;color:#fecaca}
+.stat{display:flex;justify-content:space-between;font-size:13px;color:#94a3b8}
+footer{text-align:center;color:#64748b;font-size:12px;padding:12px 0 30px}
+</style>
 </head>
-<body style="background:#101827;color:white;text-align:center;font-family:Arial;padding:40px 12px">
+<body>
+<header>
 <h1>🎬 SRT Studio</h1>
-<h2>Ilova muvaffaqiyatli ishga tushdi!</h2>
-<p>iPhone 13 uchun bepul subtitr dasturi</p>
+<p>iPhone uchun bepul subtitr muharriri</p>
+<div class="stat"><span>Mobile 1.0</span><span id="count">0 ta subtitr</span></div>
+</header>
+<main>
+<div class="tabs">
+<button id="tab-create" class="active" onclick="showTab('create')">✨ Yaratish</button>
+<button id="tab-edit" onclick="showTab('edit')">✏️ Tahrir</button>
+<button id="tab-import" onclick="showTab('import')">📥 Import</button>
+</div>
+
+<section id="create" class="card">
+<h2>Matndan SRT yaratish</h2>
+<p>Har bir qator alohida subtitrga aylanadi.</p>
+<label>Subtitr matnlari</label>
+<textarea id="source" rows="7" placeholder="Assalomu alaykum!&#10;Bugun yangi video tayyorlaymiz.&#10;Bu SRT Studio ilovasi."></textarea>
+<label>Har bir subtitr davomiyligi</label>
+<select id="duration">
+<option value="2">2 soniya</option>
+<option value="3" selected>3 soniya</option>
+<option value="4">4 soniya</option>
+<option value="5">5 soniya</option>
+<option value="6">6 soniya</option>
+</select>
+<button class="primary" onclick="generate()">✨ SRT yaratish</button>
+<p>Vaqtlar taxminiy hisoblanadi. Audio bilan avtomatik sinxronlash hali mavjud emas.</p>
+</section>
+
+<section id="edit" class="card hidden">
+<h2>Subtitr muharriri</h2>
+<p>Matn va vaqt kodlarini o'zgartiring.</p>
+<div id="editor"></div>
+<button class="secondary" onclick="addItem()">＋ Subtitr qo'shish</button>
+</section>
+
+<section id="import" class="card hidden">
+<h2>SRT import qilish</h2>
+<p>Tayyor SRT matnini kiriting yoki fayl tanlang.</p>
+<input type="file" id="fileInput" accept=".srt,text/plain" onchange="readFile(event)">
+<label>SRT matni</label>
+<textarea id="importText" rows="8" placeholder="1&#10;00:00:01,000 --> 00:00:03,000&#10;Salom!"></textarea>
+<button class="primary" onclick="importSRT()">📥 Import qilish</button>
+</section>
+
+<section class="card">
+<h2>📄 Tayyor SRT</h2>
+<div id="validation" class="notice">Hozircha subtitr yo'q.</div>
+<pre id="output">Subtitr yarating...</pre>
+<div class="row">
+<button class="secondary" onclick="copySRT()">📋 Nusxalash</button>
+<button class="green" onclick="downloadSRT()">⬇️ SRT saqlash</button>
+</div>
+</section>
+<footer>SRT Studio Mobile • Bepul • API kalitsiz</footer>
+</main>
+
+<script>
+"use strict";
+let entries=[];
+let nextId=1;
+const $=id=>document.getElementById(id);
+const pad=(n,l=2)=>String(n).padStart(l,"0");
+
+function formatTime(ms){
+ ms=Math.max(0,Math.round(ms));
+ let h=Math.floor(ms/3600000);
+ let m=Math.floor(ms/60000)%60;
+ let s=Math.floor(ms/1000)%60;
+ return pad(h)+":"+pad(m)+":"+pad(s)+","+pad(ms%1000,3);
+}
+function parseTime(str){
+ let m=/^(\d{2,}):([0-5]\d):([0-5]\d),(\d{3})$/.exec(str.trim());
+ if(!m)return -1;
+ return ((+m[1]*3600)+(+m[2]*60)+(+m[3]))*1000+(+m[4]);
+}
+function showTab(name){
+ ["create","edit","import"].forEach(n=>{
+  $(n).classList.toggle("hidden",n!==name);
+  $("tab-"+n).classList.toggle("active",n===name);
+ });
+ if(name==="edit")renderEditor();
+}
+function save(){
+ try{localStorage.setItem("srt-studio-data",JSON.stringify(entries));}catch(e){}
+}
+function update(){
+ $("count").textContent=entries.length+" ta subtitr";
+ let errors=[];
+ entries.forEach((e,i)=>{
+  let a=parseTime(e.start),b=parseTime(e.end);
+  if(a<0||b<0)errors.push("#"+(i+1)+": vaqt formati noto'g'ri");
+  else if(b<=a)errors.push("#"+(i+1)+": tugash vaqti noto'g'ri");
+  if(!e.text.trim())errors.push("#"+(i+1)+": matn bo'sh");
+  if(i>0&&a>=0){
+   let prev=parseTime(entries[i-1].end);
+   if(prev>=0&&a<prev)errors.push("#"+(i+1)+": vaqtlar ustma-ust");
+  }
+ });
+ let v=$("validation");
+ v.className="notice"+(errors.length?" error":"");
+ v.textContent=errors.length?errors.join(" | "):entries.length?"✅ SRT tayyor, xato topilmadi":"Hozircha subtitr yo'q.";
+ $("output").textContent=buildSRT()||"Subtitr yarating...";
+ save();
+}
+function buildSRT(){
+ return entries.map((e,i)=>
+  (i+1)+"\n"+e.start+" --> "+e.end+"\n"+e.text
+ ).join("\n\n")+(entries.length?"\n":"");
+}
+function generate(){
+ let lines=$("source").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+ if(!lines.length){alert("Avval matn kiriting.");return;}
+ if(entries.length&&!confirm("Mavjud subtitrlar almashtirilsinmi?"))return;
+ let d=Number($("duration").value)*1000;
+ entries=lines.map((text,i)=>({
+  id:nextId++,
+  start:formatTime(1000+i*(d+200)),
+  end:formatTime(1000+i*(d+200)+d),
+  text
+ }));
+ update();showTab("edit");
+}
+function renderEditor(){
+ let root=$("editor");
+ root.replaceChildren();
+ entries.forEach((e,i)=>{
+  let box=document.createElement("div");
+  box.className="item";
+  let head=document.createElement("div");
+  head.className="itemhead";
+  let title=document.createElement("strong");
+  title.textContent="Subtitr #"+(i+1);
+  let del=document.createElement("button");
+  del.className="danger";
+  del.textContent="O'chirish";
+  del.onclick=()=>{entries=entries.filter(x=>x.id!==e.id);renderEditor();update();};
+  head.append(title,del);
+  let times=document.createElement("div");
+  times.className="row";
+  ["start","end"].forEach(key=>{
+   let input=document.createElement("input");
+   input.className="time";
+   input.value=e[key];
+   input.setAttribute("aria-label",key==="start"?"Boshlanish":"Tugash");
+   input.oninput=()=>{e[key]=input.value;update();};
+   times.append(input);
+  });
+  let text=document.createElement("textarea");
+  text.value=e.text;
+  text.oninput=()=>{e.text=text.value;update();};
+  box.append(head,times,text);
+  root.append(box);
+ });
+}
+function addItem(){
+ let last=entries[entries.length-1];
+ let a=last?Math.max(0,parseTime(last.end))+200:1000;
+ entries.push({id:nextId++,start:formatTime(a),end:formatTime(a+3000),text:"Yangi subtitr"});
+ renderEditor();update();
+}
+function parseSRT(raw){
+ let blocks=raw.replace(/^\uFEFF/,"").replace(/\r/g,"").trim().split(/\n\s*\n/);
+ return blocks.map((block,i)=>{
+  let lines=block.split("\n");
+  let at=lines.findIndex(x=>x.includes("-->"));
+  if(at<0)throw Error((i+1)+"-blokda vaqt yo'q");
+  let match=lines[at].match(/^\s*(\d{2,}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2,}:\d{2}:\d{2},\d{3})\s*$/);
+  if(!match||parseTime(match[1])<0||parseTime(match[2])<0)throw Error((i+1)+"-blokda vaqt noto'g'ri");
+  return {id:nextId++,start:match[1],end:match[2],text:lines.slice(at+1).join("\n")};
+ });
+}
+function importSRT(){
+ let raw=$("importText").value;
+ if(!raw.trim()){alert("SRT matnini kiriting.");return;}
+ try{
+  let parsed=parseSRT(raw);
+  if(entries.length&&!confirm("Mavjud subtitrlar almashtirilsinmi?"))return;
+  entries=parsed;update();showTab("edit");
+ }catch(e){alert("Import xatosi: "+e.message);}
+}
+function readFile(event){
+ let file=event.target.files[0];
+ if(!file)return;
+ let reader=new FileReader();
+ reader.onload=()=>{$("importText").value=String(reader.result||"");};
+ reader.onerror=()=>alert("Faylni o'qib bo'lmadi.");
+ reader.readAsText(file,"UTF-8");
+}
+function valid(){
+ if(!entries.length){alert("Subtitr yo'q.");return false;}
+ let v=$("validation");
+ if(v.classList.contains("error")){alert("Avval vaqt yoki matn xatolarini tuzating.");return false;}
+ return true;
+}
+async function copySRT(){
+ if(!valid())return;
+ try{
+  await navigator.clipboard.writeText(buildSRT());
+  alert("SRT nusxalandi!");
+ }catch(e){
+  let t=document.createElement("textarea");
+  t.value=buildSRT();document.body.append(t);t.select();
+  let ok=document.execCommand("copy");t.remove();
+  alert(ok?"SRT nusxalandi!":"Nusxalash ishlamadi. Matnni qo'lda tanlang.");
+ }
+}
+function downloadSRT(){
+ if(!valid())return;
+ let blob=new Blob(["\uFEFF",buildSRT()],{type:"text/plain;charset=utf-8"});
+ let url=URL.createObjectURL(blob);
+ let a=document.createElement("a");
+ a.href=url;a.download="subtitles.srt";
+ document.body.append(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+try{
+ let saved=JSON.parse(localStorage.getItem("srt-studio-data")||"[]");
+ if(Array.isArray(saved)){
+  entries=saved.filter(e=>e&&typeof e.text==="string"&&typeof e.start==="string"&&typeof e.end==="string");
+  nextId=Math.max(0,...entries.map(e=>Number(e.id)||0))+1;
+ }
+}catch(e){}
+update();
+</script>
 </body>
 </html>
+
